@@ -1,0 +1,115 @@
+Create RDS Using Terraform 
+
+1. Terraformblock
+
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.4.0"
+    }
+  }
+}
+
+2. ProviderBlock
+
+provider "aws"{
+    region="us-west-1"
+    profile="default"
+}
+
+3. rds-block
+
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-allow-mysql"
+  description = "Allow MySQL from my IP"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] 
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_db_subnet_group" "default" {
+  name       = "default-subnet-group"
+  subnet_ids = data.aws_subnets.default.ids
+
+  tags = {
+    Name = "My DB Subnet Group"
+  }
+}
+
+resource "aws_db_instance" "aws1" {
+  identifier           = "mydb-instance"
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  username             = var.username
+  password             = var.password
+  db_name              = "mydb"
+  skip_final_snapshot  = true
+
+  
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  publicly_accessible    = true
+
+  tags = {
+    Name = "TerraformRDS"
+  }
+}
+
+4. var.tf
+
+variable "username" {
+  sensitive=true
+}
+variable "password" {
+  sensitive=true
+}
+
+5. sensitive.tf
+
+username="admin"
+password = "ravi1234"
+
+6. output.tf
+
+output "aws_rds_endpoint" {
+  description = "The connection endpoint for the RDS instance"
+  value       = aws_db_instance.aws1.endpoint
+}
+output "username" {
+  description = "RDS master username"
+  value       = var.username
+  sensitive   = true
+}
+
+output "password" {
+  description = "RDS master password"
+  value       = var.password
+  sensitive   = true
+}
+
+
